@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	_ "github.com/lib/pq"
 )
 
 func TestCreateHandler(t *testing.T) {
@@ -14,9 +16,9 @@ func TestCreateHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/pair-device", payload)
 	rec := httptest.NewRecorder()
 
-	handler := &PairDeviceHandler{createPairDevice: func(p Pair) error {
+	handler := PairDeviceHandler(func(p Pair) error {
 		return nil
-	}}
+	})
 
 	handler.ServeHTTP(rec, req)
 
