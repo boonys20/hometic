@@ -12,15 +12,18 @@ import (
 	_ "github.com/lib/pq"
 )
 
-var db *sql.DB
-
 type Pair struct {
 	DeviceID int64
 	UserID   int64
 }
 
-func PairDeviceHandler(w http.ResponseWriter, r *http.Request) {
+type PairDeviceHandler struct {
+	createPairDevice CreatePairDevice
+}
 
+type CreatePairDevice func(p Pair) error
+
+func (ph *PairDeviceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var p Pair
 	err := json.NewDecoder(r.Body).Decode(&p)
 	if err != nil {
@@ -28,53 +31,46 @@ func PairDeviceHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(err.Error())
 		return
 	}
-
 	defer r.Body.Close()
+	fmt.Printf("pair: %#v\n", p)
 
+	err = ph.createPairDevice(p)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(err.Error())
-		return
-	}
-
-	row := db.QueryRow("INSERT INTO pairs (DEVICE_ID, USER_ID) values ($1, $2) RETURNING id", p.DeviceID, p.UserID)
-	var id int
-	err = row.Scan(&id)
-	if err != nil {
-		fmt.Println("can't scan id", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(err.Error())
 		return
 	}
 
-	fmt.Printf("pair: %#v\n", p)
-	resp, err := json.Marshal(p)
+	w.Write([]byte(`{"status":"active"}`))
+}
 
-	fmt.Println("success id : ", id)
-	w.WriteHeader(http.StatusOK)
-	w.Write(resp)
+func createPairDevice(p Pair) error {
+
+	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
+	if err != nil {
+		log.Fatal("connect to database error", err)
+	}
+
+	_, err = db.Exec("INSERT INTO pairs (DEVICE_ID, USER_ID) values ($1, $2) RETURNING id", p.DeviceID, p.UserID)
+
+	return err
+
 }
 
 func main() {
-	fmt.Println("Hello hometic : I'm Gopher !!!")
+	fmt.Println("hello hometic : I'm Gopher!!")
 
 	r := mux.NewRouter()
-	r.HandleFunc("/pair-device", PairDeviceHandler).Methods(http.MethodPost)
+	r.Handle("/pair-device", &PairDeviceHandler{createPairDevice}).Methods(http.MethodPost)
 
 	addr := fmt.Sprintf("0.0.0.0:%s", os.Getenv("PORT"))
-	fmt.Printf("server port : %v", addr)
+	fmt.Println("addr:", addr)
 
 	server := http.Server{
 		Addr:    addr,
 		Handler: r,
 	}
 
-	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
-	if err != nil {
-		log.Fatal("connect to database error", err)
-	}
-	defer db.Close()
-
-	log.Println(" Starting ..... ")
+	log.Println("starting...")
 	log.Fatal(server.ListenAndServe())
 }
