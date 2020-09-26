@@ -24,7 +24,7 @@ func TestCreateHandler(t *testing.T) {
 		return nil
 	}
 
-	handler := PairDeviceHandler(CreatePairDeviceFunc(create))
+	handler := CustomHandlerFunc(PairDeviceHandler(CreatePairDeviceFunc(create)))
 
 	handler.ServeHTTP(rec, req)
 

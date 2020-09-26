@@ -22,30 +22,55 @@ type Device interface {
 	Pair(p Pair) error
 }
 
+type CustomHandlerFunc func(CustomRespWriter, *http.Request)
+
+func (handler CustomHandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	handler(&JSONRespWriter{w}, r)
+}
+
+type CustomRespWriter interface {
+	JSON(statusCode int, date interface{})
+}
+
+type JSONRespWriter struct {
+	http.ResponseWriter
+}
+
+func (w *JSONRespWriter) JSON(statusCode int, data interface{}) {
+	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
+	json.NewEncoder(w).Encode(data)
+}
+
 type CreatePairDeviceFunc func(p Pair) error
 
 func (fn CreatePairDeviceFunc) Pair(p Pair) error {
 	return fn(p)
 }
 
-func NewCreatePairDevice(db *sql.DB) CreatePairDeviceFunc {
+type DB interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+}
+
+func NewCreatePairDevice(db DB) CreatePairDeviceFunc {
+	//func NewCreatePairDevice(db *sql.DB) CreatePairDeviceFunc {
 	return func(p Pair) error {
 		_, err := db.Exec("INSERT INTO pairs VALUES ($1,$2);", p.DeviceID, p.UserID)
 		return err
 	}
+	//}
 }
 
-func PairDeviceHandler(device Device) http.HandlerFunc {
+func PairDeviceHandler(device Device) func(w CustomRespWriter, r *http.Request) {
 
-	return func(w http.ResponseWriter, r *http.Request) {
+	return func(w CustomRespWriter, r *http.Request) {
 
 		logger.L(r.Context()).Info("pair-device")
 
 		var p Pair
 		err := json.NewDecoder(r.Body).Decode(&p)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(err.Error())
+			w.JSON(http.StatusBadRequest, err.Error())
 			return
 		}
 
@@ -54,25 +79,27 @@ func PairDeviceHandler(device Device) http.HandlerFunc {
 
 		err = device.Pair(p)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(err.Error())
+			w.JSON(http.StatusBadRequest, err.Error())
 			return
 		}
-		w.Write([]byte(`{"status":"active"}`))
+
+		w.JSON(http.StatusOK, []byte(`{"status":"active"}`))
+
 	}
 
 }
 
-func main() {
+func run() error {
 	fmt.Println("hello hometic : I'm Gopher!!")
 
 	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
 		log.Fatal(err)
+		return err
 	}
 
 	r := mux.NewRouter()
-	r.Handle("/pair-device", PairDeviceHandler(NewCreatePairDevice(db))).Methods(http.MethodPost)
+	r.Handle("/pair-device", CustomHandlerFunc(PairDeviceHandler(NewCreatePairDevice(db)))).Methods(http.MethodPost)
 
 	r.Use(logger.MiddleWare)
 
@@ -85,5 +112,17 @@ func main() {
 	}
 
 	log.Println("starting...")
-	log.Fatal(server.ListenAndServe())
+	err = server.ListenAndServe()
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
+
+	return nil
+}
+
+func main() {
+	if err := run(); err != nil {
+		log.Fatal("Can't Start application", err)
+	}
 }
