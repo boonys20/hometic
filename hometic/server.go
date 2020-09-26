@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/boonys20/hometic/logger"
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
-	"go.uber.org/zap"
 )
 
 type Pair struct {
@@ -36,10 +36,10 @@ func NewCreatePairDevice(db *sql.DB) CreatePairDeviceFunc {
 }
 
 func PairDeviceHandler(device Device) http.HandlerFunc {
+
 	return func(w http.ResponseWriter, r *http.Request) {
-		l := zap.NewExample()
-		l = l.With(zap.Namespace("hometic"), zap.String("I'm", "gopher"))
-		l.Info("Hello")
+
+		logger.L(r.Context()).Info("pair-device")
 
 		var p Pair
 		err := json.NewDecoder(r.Body).Decode(&p)
@@ -48,6 +48,7 @@ func PairDeviceHandler(device Device) http.HandlerFunc {
 			json.NewEncoder(w).Encode(err.Error())
 			return
 		}
+
 		defer r.Body.Close()
 		fmt.Printf("pair: %#v\n", p)
 
@@ -59,6 +60,7 @@ func PairDeviceHandler(device Device) http.HandlerFunc {
 		}
 		w.Write([]byte(`{"status":"active"}`))
 	}
+
 }
 
 func main() {
@@ -71,6 +73,8 @@ func main() {
 
 	r := mux.NewRouter()
 	r.Handle("/pair-device", PairDeviceHandler(NewCreatePairDevice(db))).Methods(http.MethodPost)
+
+	r.Use(logger.MiddleWare)
 
 	addr := fmt.Sprintf("0.0.0.0:%s", os.Getenv("PORT"))
 	fmt.Println("addr:", addr)
