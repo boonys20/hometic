@@ -10,6 +10,7 @@ import (
 
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
+	"go.uber.org/zap"
 )
 
 type Pair struct {
@@ -36,6 +37,10 @@ func NewCreatePairDevice(db *sql.DB) CreatePairDeviceFunc {
 
 func PairDeviceHandler(device Device) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		l := zap.NewExample()
+		l = l.With(zap.Namespace("hometic"), zap.String("I'm", "gopher"))
+		l.Info("Hello")
+
 		var p Pair
 		err := json.NewDecoder(r.Body).Decode(&p)
 		if err != nil {
@@ -59,7 +64,7 @@ func PairDeviceHandler(device Device) http.HandlerFunc {
 func main() {
 	fmt.Println("hello hometic : I'm Gopher!!")
 
-	db, err := sql.Open("postgres", os.Getenv("postgres://qrulmoqq:3Zu_Xhw121TaveedaBFPEQ_5Z_MGVel6@john.db.elephantsql.com:5432/qrulmoqq"))
+	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
 		log.Fatal(err)
 	}
