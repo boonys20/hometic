@@ -45,7 +45,6 @@ func (ph *PairDeviceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func createPairDevice(p Pair) error {
-
 	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
 		log.Fatal("connect to database error", err)
